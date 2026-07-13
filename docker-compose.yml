@@ -1,0 +1,39 @@
+services:
+  simplex-tor:
+    image: lncm/tor:latest
+    container_name: simplex-tor
+    restart: unless-stopped
+    user: "${USER_UID}:${USER_GID}"
+    depends_on:
+      - simplex-smp
+      - simplex-xftp
+    volumes:
+      - ./torrc:/etc/tor/torrc:ro
+      - ./data/tor:/data/.tor:z
+
+  simplex-smp:
+    image: simplexchat/smp-server:latest
+    container_name: simplex-smp
+    restart: unless-stopped
+    user: "${USER_UID}:${USER_GID}"
+    environment:
+      - WEB_MANUAL=${WEB_MANUAL:-1}
+      - ADDR=${ADDR_SMP?"Please specify the SMP domain."}
+      - PASS=${PASS:-}
+    volumes:
+      - ./data/smp/config:/etc/opt/simplex:z
+      - ./data/smp/state:/var/opt/simplex:z
+
+  simplex-xftp:
+    image: simplexchat/xftp-server:latest
+    container_name: simplex-xftp
+    restart: unless-stopped
+    user: "${USER_UID}:${USER_GID}"
+    environment:
+      - ADDR=${ADDR_XFTP?"Please specify the XFTP domain."}
+      - QUOTA=${QUOTA?"Please specify the quota for the XFTP server."}
+      - PASS=${PASS:-}
+    volumes:
+      - ./data/xftp/config:/etc/opt/simplex-xftp:z
+      - ./data/xftp/state:/var/opt/simplex-xftp:z
+      - ./data/xftp/files:/srv/xftp

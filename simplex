@@ -1,0 +1,127 @@
+#!/usr/bin/env bash
+set -e
+
+# 1. Handle .env file initialization if it doesn't exist
+if [ ! -f .env ]; then
+    echo "📄 .env file not found. Initializing from .env.example..."
+    if [ -f .env.example ]; then
+        cp .env.example .env
+    else
+        echo "⚠️ .env.example not found! Creating a blank .env file..."
+        touch .env
+    fi
+fi
+
+# 2. Ensure data directories exist with current user permissions
+echo "⚙️  Ensuring data directories exist..."
+mkdir -p ./data/tor \
+         ./data/smp/config \
+         ./data/smp/state \
+         ./data/xftp/config \
+         ./data/xftp/state \
+         ./data/xftp/files
+
+TARGET_SMP="./data/tor/simplex-smp"
+TARGET_XFTP="./data/tor/simplex-xftp"
+
+# 3. Generate Tor Onion v3 Keys natively via official Tor container if missing
+if [ ! -d "$TARGET_SMP" ] || [ ! -d "$TARGET_XFTP" ]; then
+    echo "🔑 Tor keys missing. Generating official Onion v3 addresses via native Tor container..."
+    
+    # Run an ephemeral Tor container to generate genuine cryptographic v3 keypairs natively
+    timeout 2s docker run --rm \
+        -v "$(pwd)/data/tor:/var/lib/tor" \
+        lncm/tor:latest \
+        tor --ignore-missing-torrc \
+            --HiddenServiceDir /var/lib/tor/simplex-smp \
+            --HiddenServicePort "5223 127.0.0.1:5223" \
+            --HiddenServiceDir /var/lib/tor/simplex-xftp \
+            --HiddenServicePort "443 127.0.0.1:443" > /dev/null 2>&1 || true
+
+    # Re-enforce strict ownership/permissions right after generation
+    chmod 700 ./data/tor/simplex-smp ./data/tor/simplex-xftp
+    chmod 600 ./data/tor/simplex-smp/* ./data/tor/simplex-xftp/* 2>/dev/null
+    
+    # Read the authentic keys generated directly by Tor
+    ONION_SMP=$(cat "$TARGET_SMP/hostname")
+    ONION_XFTP=$(cat "$TARGET_XFTP/hostname")
+    echo "✨ Generated new Onion keys natively."
+else
+    echo "🔑 Tor keys already exist. Reading current Onion addresses..."
+    # Read the existing onion addresses from the hostname files
+    ONION_SMP=$(cat "$TARGET_SMP/hostname")
+    ONION_XFTP=$(cat "$TARGET_XFTP/hostname")
+fi
+
+# 4. Safely ensure environment variables match reality
+echo "📝 Checking and enforcing .env variables..."
+
+ensure_env_var() {
+    local var_name=$1
+    local var_value=$2
+    
+    # Check if the variable is already defined in the .env file
+    if grep -q "^${var_name}=" .env; then
+        # Extract the current value from the .env file
+        local current_value=$(grep "^${var_name}=" .env | cut -d'=' -f2-)
+        
+        # If the value is different, update it in place using sed
+        if [ "$current_value" != "$var_value" ]; then
+            local escaped_value=$(echo "$var_value" | sed 's/[&/]/\\&/g')
+            sed -i "s|^${var_name}=.*|${var_name}=${escaped_value}|" .env
+            echo "    🔄 Updated ${var_name} to match system reality."
+        fi
+    else
+        # If it doesn't exist, check for missing trailing newline once and append
+        if [ -f .env ] && [ -n "$(tail -c1 .env 2>/dev/null)" ]; then
+            echo "" >> .env
+        fi
+
+        echo "${var_name}=${var_value}" >> .env
+        echo "    ✅ Added ${var_name} to .env"
+    fi
+}
+
+# Enforce exact matches for the Tor addresses (reality strictly overrides the .env)
+ensure_env_var "ADDR_SMP" "${ONION_SMP}"
+ensure_env_var "ADDR_XFTP" "${ONION_XFTP}"
+
+echo "✨ Environment validation complete!"
+echo "    🔹 SMP Server:  $ONION_SMP"
+echo "    🔹 XFTP Server: $ONION_XFTP"
+
+# 5. Export current UID and GID so Docker Compose can read them
+export USER_UID=$(id -u)
+export USER_GID=$(id -g)
+
+# 6. Handle custom commands or pass through to Docker Compose
+if [ "$1" == "info" ] || [ "$1" == "urls" ]; then
+    echo "ℹ️ SimpleX Node Connection Information:"
+    echo "----------------------------------------"
+    
+    # Check if the containers have already generated the fingerprints
+    if [ -f "./data/smp/config/fingerprint" ] && [ -f "./data/xftp/config/fingerprint" ]; then
+        # Read fingerprints and strip any trailing newlines/spaces
+        FP_SMP=$(cat ./data/smp/config/fingerprint | tr -d '[:space:]')
+        FP_XFTP=$(cat ./data/xftp/config/fingerprint | tr -d '[:space:]')
+        
+        # Format and display the connection strings
+        echo "simplex-smp  | smp://${FP_SMP}@${ONION_SMP}"
+        echo "simplex-xftp | xftp://${FP_XFTP}@${ONION_XFTP}"
+    else
+        echo "⚠️ Fingerprint files not found yet."
+        echo "   Please run './simplex' first to boot the node and generate the server profiles."
+    fi
+    echo "----------------------------------------"
+    exit 0
+fi
+
+# Default behavior for Docker Compose
+echo "🚀 Running Docker Compose..."
+if [ $# -eq 0 ]; then
+    # Default behavior: boot the node up in the background
+    docker compose up -d
+else
+    # Pass through standard compose commands (down, logs, ps, etc.)
+    docker compose "$@"
+fi

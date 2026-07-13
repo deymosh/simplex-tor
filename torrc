@@ -1,0 +1,42 @@
+# TOR Configuration for private Simplex Chat Server
+# This file configures TOR to expose Simplex server via .onion only
+
+# Logging level
+Log notice stdout
+
+# SOCKS proxy - for clients connecting via TOR
+SocksPort 9050
+
+# Data directory (must be in persistent volume default: /data/.tor/)
+# DataDirectory /data/.tor/
+
+# === ONION SERVICES (Simplex accessible via .onion) ===
+
+# SMP (secure messaging protocol) ports
+HiddenServiceDir /data/.tor/simplex-smp
+HiddenServicePort 5223 simplex-smp:5223
+HiddenServiceVersion 3
+
+# XFTP (file transfer) port
+HiddenServiceDir /data/.tor/simplex-xftp
+HiddenServicePort 443 simplex-xftp:443
+HiddenServiceVersion 3
+
+# Security and privacy
+SafeLogging 1
+DisableDebuggerAttachment 1
+
+# Performance
+NumEntryGuards 8
+GuardLifetime 60 days
+
+# Timeouts and connections
+CircuitBuildTimeout 60
+KeepalivePeriod 300
+
+# Additional privacy - no relay for other users
+RelayBandwidthRate 1 bytes
+RelayBandwidthBurst 1 bytes
+
+# Exit policy - restrict to necessary ports only
+ExitPolicy reject *:*
