@@ -59,3 +59,14 @@ Once the node has booted for the first time and generated its server cryptograph
 ```
 
 *(It also responds to the alias `./simplex urls`)*
+
+---
+
+## 📚 References & Credits
+
+This project relies on the following technologies and standards:
+
+* **[SimpleX](https://simplex.chat/):** The core messaging protocol and architecture for private, decentralized communication.
+* **[SimpleX App](https://github.com/simplex-chat/simplex-chat):** Official client repository.
+* **[SimpleX Server](https://github.com/simplex-chat/simplexmq):** Official server (SMP/XFTP) implementation.
+* **[Tor Project](https://www.torproject.org/):** The underlying anonymity network that enables hidden services, ensuring location privacy for the node.
