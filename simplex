@@ -4,6 +4,10 @@ set -e
 # Log file for setup operations
 LOG_FILE="./data/setup.log"
 
+# Export current UID and GID for Docker Compose to use
+export USER_UID=$(id -u)
+export USER_GID=$(id -g)
+
 # 1. Handle .env file initialization if it doesn't exist
 if [ ! -f .env ]; then
     echo "📄 .env file not found. Initializing from .env.example..."
@@ -32,7 +36,7 @@ if [ ! -d "$TARGET_SMP" ] || [ ! -d "$TARGET_XFTP" ]; then
     echo "🔑 Tor keys missing. Generating official Onion v3 addresses via native Tor container..."
 
     # Pull the official Tor image to ensure it is available for key generation
-    echo "⬇️ Pulling Tor image..."
+    echo "⬇️  Pulling Tor image..."
 
     if ! docker pull lncm/tor:latest > "$LOG_FILE" 2>&1; then
         echo "❌ Error: Docker pull failed. Check $LOG_FILE for details."
@@ -42,6 +46,7 @@ if [ ! -d "$TARGET_SMP" ] || [ ! -d "$TARGET_XFTP" ]; then
 
     # Run an ephemeral Tor container to generate genuine cryptographic v3 keypairs natively
     timeout 2s docker run --rm \
+        --user "$USER_UID:$USER_GID" \
         -v "$(pwd)/data/tor:/var/lib/tor" \
         lncm/tor:latest \
         tor --ignore-missing-torrc \
@@ -50,11 +55,7 @@ if [ ! -d "$TARGET_SMP" ] || [ ! -d "$TARGET_XFTP" ]; then
             --HiddenServiceDir /var/lib/tor/simplex-xftp \
             --HiddenServicePort "443 127.0.0.1:443" > /dev/null 2>&1 || true
 
-    # Re-enforce strict ownership/permissions right after generation
-    chmod 700 ./data/tor/simplex-smp ./data/tor/simplex-xftp
-    chmod 600 ./data/tor/simplex-smp/* ./data/tor/simplex-xftp/* 2>/dev/null
-    
-    # Read the authentic keys generated directly by Tor
+    # Read the keys generated directly by Tor
     ONION_SMP=$(cat "$TARGET_SMP/hostname")
     ONION_XFTP=$(cat "$TARGET_XFTP/hostname")
     echo "✨ Generated new Onion keys natively."
@@ -102,11 +103,7 @@ echo "✨ Environment validation complete!"
 echo "    🔹 SMP Server:  $ONION_SMP"
 echo "    🔹 XFTP Server: $ONION_XFTP"
 
-# 5. Export current UID and GID so Docker Compose can read them
-export USER_UID=$(id -u)
-export USER_GID=$(id -g)
-
-# 6. Handle custom commands or pass through to Docker Compose
+# 5. Handle custom commands or pass through to Docker Compose
 if [ "$1" == "info" ] || [ "$1" == "urls" ]; then
     echo "ℹ️ SimpleX Node Connection Information:"
     echo "----------------------------------------"
