@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
 set -e
 
+# Log file for setup operations
+LOG_FILE="./data/setup.log"
+
 # 1. Handle .env file initialization if it doesn't exist
 if [ ! -f .env ]; then
     echo "📄 .env file not found. Initializing from .env.example..."
@@ -27,7 +30,16 @@ TARGET_XFTP="./data/tor/simplex-xftp"
 # 3. Generate Tor Onion v3 Keys natively via official Tor container if missing
 if [ ! -d "$TARGET_SMP" ] || [ ! -d "$TARGET_XFTP" ]; then
     echo "🔑 Tor keys missing. Generating official Onion v3 addresses via native Tor container..."
-    
+
+    # Pull the official Tor image to ensure it is available for key generation
+    echo "⬇️ Pulling Tor image..."
+
+    if ! docker pull lncm/tor:latest > "$LOG_FILE" 2>&1; then
+        echo "❌ Error: Docker pull failed. Check $LOG_FILE for details."
+        cat "$LOG_FILE" # Display the log for user reference
+        exit 1
+    fi
+
     # Run an ephemeral Tor container to generate genuine cryptographic v3 keypairs natively
     timeout 2s docker run --rm \
         -v "$(pwd)/data/tor:/var/lib/tor" \
