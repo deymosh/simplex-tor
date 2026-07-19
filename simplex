@@ -105,23 +105,42 @@ echo "    🔹 XFTP Server: $ONION_XFTP"
 
 # 5. Handle custom commands or pass through to Docker Compose
 if [ "$1" == "info" ] || [ "$1" == "urls" ]; then
-    echo "ℹ️ SimpleX Node Connection Information:"
-    echo "----------------------------------------"
+    echo "ℹ️  SimpleX Node Connection Information:"
     
     # Check if the containers have already generated the fingerprints
     if [ -f "./data/smp/config/fingerprint" ] && [ -f "./data/xftp/config/fingerprint" ]; then
         # Read fingerprints and strip any trailing newlines/spaces
         FP_SMP=$(cat ./data/smp/config/fingerprint | tr -d '[:space:]')
         FP_XFTP=$(cat ./data/xftp/config/fingerprint | tr -d '[:space:]')
-        
+
+        URI_SMP="smp://${FP_SMP}@${ONION_SMP}"
+        URI_XFTP="xftp://${FP_XFTP}@${ONION_XFTP}"
+
         # Format and display the connection strings
-        echo "simplex-smp  | smp://${FP_SMP}@${ONION_SMP}"
-        echo "simplex-xftp | xftp://${FP_XFTP}@${ONION_XFTP}"
+        echo "----------------------------------------"
+        echo "simplex-smp  | ${URI_SMP}"
+        echo "simplex-xftp | ${URI_XFTP}"
+        echo "----------------------------------------"
+
+        # If qrencode is available, display QR codes side by side
+        if command -v qrencode &> /dev/null; then
+            echo ""
+            printf "%-45s %-45s\n" "--- SMP ---" "--- XFTP ---"
+            qrencode -m 2 -t UTF8 "$URI_SMP" > /tmp/qr_smp.txt
+            qrencode -m 2 -t UTF8 "$URI_XFTP" > /tmp/qr_xftp.txt
+
+            # Use paste to display both QR codes side by side
+            paste -d ' ' /tmp/qr_smp.txt /tmp/qr_xftp.txt
+
+            # Clean up temporary QR code files
+            rm /tmp/qr_smp.txt /tmp/qr_xftp.txt
+        else
+            echo "⚠️  Install 'qrencode' to display QR codes for the connection strings."
+        fi
     else
-        echo "⚠️ Fingerprint files not found yet."
+        echo "⚠️  Fingerprint files not found yet."
         echo "   Please run './simplex' first to boot the node and generate the server profiles."
     fi
-    echo "----------------------------------------"
     exit 0
 fi
 
