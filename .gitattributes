@@ -1,0 +1,15 @@
+# Normalize all text files to LF in the repository and on checkout.
+# The stack targets Linux and is edited from mixed platforms (Linux, Git
+# Bash); CRLF breaks shell scripts and torrc parsing on Linux.
+* text=auto eol=lf
+
+# Scripts and configs must never gain CRLF
+*.sh   text eol=lf
+simplex text eol=lf
+torrc   text eol=lf
+Dockerfile text eol=lf
+*.yml   text eol=lf
+*.yaml  text eol=lf
+*.md    text eol=lf
+*.example text eol=lf
+.env.example text eol=lf
