@@ -37,3 +37,21 @@ services:
       - ./data/xftp/config:/etc/opt/simplex-xftp:z
       - ./data/xftp/state:/var/opt/simplex-xftp:z
       - ./data/xftp/files:/srv/xftp
+
+  # Chat relay: a simplex-chat client in relay mode. It has no inbound ports -
+  # it reaches SMP servers (ours, over Tor) outbound via the simplex-tor SOCKS
+  # proxy, sharing its network namespace.
+  simplex-relay:
+    build: ./relay
+    image: simplex-chat-relay:local
+    container_name: simplex-relay
+    restart: unless-stopped
+    user: "${USER_UID}:${USER_GID}"
+    network_mode: "service:simplex-tor"
+    depends_on:
+      - simplex-tor
+    environment:
+      - RELAY_NAME=${RELAY_NAME?"Please specify the relay display name."}
+      - RELAY_SMP_SERVER=${RELAY_SMP_SERVER:-}
+    volumes:
+      - ./data/relay:/data:z

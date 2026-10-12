@@ -26,7 +26,8 @@ mkdir -p ./data/tor \
          ./data/smp/state \
          ./data/xftp/config \
          ./data/xftp/state \
-         ./data/xftp/files
+         ./data/xftp/files \
+         ./data/relay
 
 TARGET_SMP="./data/tor/simplex-smp"
 TARGET_XFTP="./data/tor/simplex-xftp"
@@ -53,7 +54,7 @@ if [ ! -d "$TARGET_SMP" ] || [ ! -d "$TARGET_XFTP" ]; then
             --DataDirectory /data/.tor \
             --HiddenServiceDir /data/.tor/simplex-smp \
             --HiddenServicePort "5223 127.0.0.1:5223" \
-            --HiddenServiceDir /data/.tor/simplex-xftp \
+            --HiddenServiceDir /var/lib/tor/simplex-xftp \
             --HiddenServicePort "443 127.0.0.1:443" > /dev/null 2>&1 || true
 
     # Read the keys generated directly by Tor
@@ -100,6 +101,27 @@ ensure_env_var() {
 ensure_env_var "ADDR_SMP" "${ONION_SMP}"
 ensure_env_var "ADDR_XFTP" "${ONION_XFTP}"
 
+# 4b. Point the chat relay's address at our own SMP onion server.
+# The SMP fingerprint is generated on first boot; if it is missing and we are
+# booting the node, start the core services first and wait for it briefly.
+FP_SMP_FILE="./data/smp/config/fingerprint"
+if [ ! -f "$FP_SMP_FILE" ] && [ $# -eq 0 ]; then
+    echo "⏳ SMP fingerprint not found. Starting core services to generate it..."
+    docker compose up -d simplex-tor simplex-smp simplex-xftp
+    for _ in $(seq 1 60); do
+        [ -f "$FP_SMP_FILE" ] && break
+        sleep 2
+    done
+fi
+if [ -f "$FP_SMP_FILE" ]; then
+    FP_SMP=$(tr -d '[:space:]' < "$FP_SMP_FILE")
+    ensure_env_var "RELAY_SMP_SERVER" "smp://${FP_SMP}@${ONION_SMP}"
+    echo "    🔹 Relay addr server: smp://${FP_SMP}@${ONION_SMP}"
+else
+    echo "⚠️  SMP fingerprint not available yet - RELAY_SMP_SERVER not set."
+    echo "   The relay will retry; run './simplex' again once it is generated."
+fi
+
 echo "✨ Environment validation complete!"
 echo "    🔹 SMP Server:  $ONION_SMP"
 echo "    🔹 XFTP Server: $ONION_XFTP"
@@ -137,6 +159,18 @@ if [ "$1" == "info" ] || [ "$1" == "urls" ]; then
             rm /tmp/qr_smp.txt /tmp/qr_xftp.txt
         else
             echo "⚠️  Install 'qrencode' to display QR codes for the connection strings."
+        fi
+
+        # Chat relay address (captured by the relay container on first start)
+        if [ -s "./data/relay-address.txt" ]; then
+            RELAY_ADDR=$(cat ./data/relay-address.txt)
+            echo ""
+            echo "chat-relay    | ${RELAY_ADDR}"
+            echo "               (use 'Add relay' in the app to let members route"
+            echo "                channel delivery through your relay)"
+        else
+            echo ""
+            echo "chat-relay    | address not captured yet (check: ./simplex logs simplex-relay)"
         fi
     else
         echo "⚠️  Fingerprint files not found yet."
