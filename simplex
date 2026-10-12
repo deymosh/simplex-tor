@@ -8,6 +8,25 @@ LOG_FILE="./data/setup.log"
 export USER_UID=$(id -u)
 export USER_GID=$(id -g)
 
+# Tor always runs unprivileged. On Linux it uses the invoking user, who owns
+# ./data/tor. Docker Desktop (Git Bash) bind mounts always appear root-owned,
+# which Tor's DataDirectory ownership check rejects (chowning just the data
+# directory is the minimal fix - pre-creating child folders or chmod do not
+# help), so there the script hands ./data/tor to uid 1000 (the image's
+# toruser) and Tor runs as that user. MSYS also rewrites POSIX-looking
+# absolute paths in docker args (e.g. /data/.tor -> C:/Program Files/Git/
+# data/.tor); disabling the conversion is a no-op on Linux.
+export MSYS_NO_PATHCONV=1
+HOST_DIR="$(pwd -W 2>/dev/null || pwd)"
+if [ -n "${MSYSTEM:-}" ]; then
+    export TOR_UID=1000 TOR_GID=1000
+    docker run --rm --user 0:0 --entrypoint sh \
+        -v "${HOST_DIR}/data/tor:/d" ghcr.io/deymosh/tor:latest \
+        -c 'chown 1000:1000 /d' > /dev/null 2>&1 || true
+else
+    export TOR_UID="$USER_UID" TOR_GID="$USER_GID"
+fi
+
 # 1. Handle .env file initialization if it doesn't exist
 if [ ! -f .env ]; then
     echo "📄 .env file not found. Initializing from .env.example..."
@@ -45,19 +64,42 @@ if [ ! -d "$TARGET_SMP" ] || [ ! -d "$TARGET_XFTP" ]; then
         exit 1
     fi
 
-    # Run an ephemeral Tor container to generate genuine cryptographic v3 keypairs natively
-    timeout 2s docker run --rm \
-        --user "$USER_UID:$USER_GID" \
-        -v "$(pwd)/data/tor:/data/.tor" \
+    # Run an ephemeral Tor container to generate genuine cryptographic v3
+    # keypairs natively. It is stopped gracefully (docker stop -> SIGTERM) so
+    # Tor releases its data-directory lock: a hard kill leaves the lock held
+    # on Docker Desktop file shares and the simplex-tor service then refuses
+    # to start ("another Tor process is running").
+    KEYGEN_CTR="simplex-tor-keygen"
+    docker rm -f "$KEYGEN_CTR" > /dev/null 2>&1 || true
+    docker run -d --name "$KEYGEN_CTR" \
+        --user "$TOR_UID:$TOR_GID" \
+        -v "${HOST_DIR}/data/tor:/data/.tor" \
         ghcr.io/deymosh/tor:latest \
         --ignore-missing-torrc \
             --DataDirectory /data/.tor \
             --HiddenServiceDir /data/.tor/simplex-smp \
             --HiddenServicePort "5223 127.0.0.1:5223" \
-            --HiddenServiceDir /var/lib/tor/simplex-xftp \
-            --HiddenServicePort "443 127.0.0.1:443" > /dev/null 2>&1 || true
+            --HiddenServiceDir /data/.tor/simplex-xftp \
+            --HiddenServicePort "443 127.0.0.1:443" > /dev/null
+
+    # Wait for the onion hostnames to be written
+    for _ in $(seq 1 20); do
+        [ -s "$TARGET_SMP/hostname" ] && [ -s "$TARGET_XFTP/hostname" ] && break
+        sleep 1
+    done
+
+    # Graceful stop (Tor releases its lock on clean shutdown), then cleanup
+    docker stop -t 10 "$KEYGEN_CTR" > /dev/null 2>&1 || true
+    docker rm -f "$KEYGEN_CTR" > /dev/null 2>&1 || true
 
     # Read the keys generated directly by Tor
+    if [ ! -s "$TARGET_SMP/hostname" ] || [ ! -s "$TARGET_XFTP/hostname" ]; then
+        echo "❌ Error: Tor key generation failed - hostname files are missing."
+        echo "   Check the Tor container logs, and if ./data was deleted while"
+        echo "   the stack was running on Docker Desktop, restart Docker Desktop"
+        echo "   (it serves recreated mount roots from a stale file-share handle)."
+        exit 1
+    fi
     ONION_SMP=$(cat "$TARGET_SMP/hostname")
     ONION_XFTP=$(cat "$TARGET_XFTP/hostname")
     echo "✨ Generated new Onion keys natively."

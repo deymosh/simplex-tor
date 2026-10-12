@@ -8,8 +8,10 @@ The deployment is fully optimized to run without root privileges (`rootless`) an
 
 ## 🛠️ Prerequisites
 
-* **Operating System:** Linux (Ubuntu / Debian recommended).
+* **Operating System:** Linux (Ubuntu / Debian recommended), or Windows via Git Bash with Docker Desktop.
 * **Engine:** Docker and Docker Compose installed.
+
+On Linux, Tor runs as the invoking user, who owns `./data/tor`. On Docker Desktop (Git Bash), where bind mounts always appear root-owned inside containers, the `./simplex` script hands `./data/tor` to the image's unprivileged `toruser` (uid 1000) so Tor can still run without root.
 
 ---
 

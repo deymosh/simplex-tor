@@ -3,7 +3,10 @@ services:
     image: ghcr.io/deymosh/tor:latest
     container_name: simplex-tor
     restart: unless-stopped
-    user: "${USER_UID}:${USER_GID}"
+    # Tor enforces DataDirectory ownership and runs unprivileged: the
+    # ./simplex script exports the invoking user's UID/GID on Linux, and
+    # 1000:1000 (toruser) on Docker Desktop, where it also chowns ./data/tor.
+    user: "${TOR_UID}:${TOR_GID}"
     depends_on:
       - simplex-smp
       - simplex-xftp
