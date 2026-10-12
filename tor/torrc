@@ -1,5 +1,5 @@
-# TOR Configuration for private Simplex Chat Server
-# This file configures TOR to expose Simplex server via .onion only
+# TOR Configuration for private SimpleX Chat Server
+# This file configures TOR to expose SimpleX server via .onion only
 
 # Logging level
 Log notice stdout
@@ -10,7 +10,7 @@ SocksPort 9050
 # Data directory (must be in persistent volume default: /data/.tor/)
 # DataDirectory /data/.tor/
 
-# === ONION SERVICES (Simplex accessible via .onion) ===
+# === ONION SERVICES (SimpleX accessible via .onion) ===
 
 # SMP (secure messaging protocol) ports
 HiddenServiceDir /data/.tor/simplex-smp
