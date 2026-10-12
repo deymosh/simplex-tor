@@ -204,8 +204,8 @@ if [ "$1" == "info" ] || [ "$1" == "urls" ]; then
         fi
 
         # Chat relay address (captured by the relay container on first start)
-        if [ -s "./data/relay-address.txt" ]; then
-            RELAY_ADDR=$(cat ./data/relay-address.txt)
+        if [ -s "./data/relay/relay-address.txt" ]; then
+            RELAY_ADDR=$(cat ./data/relay/relay-address.txt)
             echo ""
             echo "chat-relay    | ${RELAY_ADDR}"
             echo "               (use 'Add relay' in the app to let members route"

@@ -24,6 +24,12 @@ TOR_ARGS=(
     --host-mode onion
 )
 
+# Use the stack's own SMP server instead of the simplex.im presets
+SERVER_ARGS=()
+if [ -n "${RELAY_SMP_SERVER:-}" ]; then
+    SERVER_ARGS+=(--server "$RELAY_SMP_SERVER")
+fi
+
 if [ ! -s "$ADDRESS_FILE" ]; then
     if [ -z "${RELAY_SMP_SERVER:-}" ]; then
         echo "entrypoint: RELAY_SMP_SERVER is required to create the relay address." >&2
@@ -36,6 +42,7 @@ if [ ! -s "$ADDRESS_FILE" ]; then
         --relay --headless
         --user-display-name "$RELAY_NAME"
         --relay-address-server "$RELAY_SMP_SERVER"
+        "${SERVER_ARGS[@]}"
         "${TOR_ARGS[@]}"
         -d "$DB"
         -t 0 -e /sa
@@ -53,4 +60,4 @@ else
     echo "entrypoint: relay address: $(cat "$ADDRESS_FILE")"
 fi
 
-exec simplex-chat-relay --relay --headless --user-display-name "$RELAY_NAME" "${TOR_ARGS[@]}" -d "$DB"
+exec simplex-chat-relay --relay --headless --user-display-name "$RELAY_NAME" "${SERVER_ARGS[@]}" "${TOR_ARGS[@]}" -d "$DB"
