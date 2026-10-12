@@ -38,7 +38,7 @@ if [ ! -d "$TARGET_SMP" ] || [ ! -d "$TARGET_XFTP" ]; then
     # Pull the official Tor image to ensure it is available for key generation
     echo "⬇️  Pulling Tor image..."
 
-    if ! docker pull lncm/tor:latest > "$LOG_FILE" 2>&1; then
+    if ! docker pull ghcr.io/deymosh/tor:latest > "$LOG_FILE" 2>&1; then
         echo "❌ Error: Docker pull failed. Check $LOG_FILE for details."
         cat "$LOG_FILE" # Display the log for user reference
         exit 1
@@ -47,12 +47,13 @@ if [ ! -d "$TARGET_SMP" ] || [ ! -d "$TARGET_XFTP" ]; then
     # Run an ephemeral Tor container to generate genuine cryptographic v3 keypairs natively
     timeout 2s docker run --rm \
         --user "$USER_UID:$USER_GID" \
-        -v "$(pwd)/data/tor:/var/lib/tor" \
-        lncm/tor:latest \
-        tor --ignore-missing-torrc \
-            --HiddenServiceDir /var/lib/tor/simplex-smp \
+        -v "$(pwd)/data/tor:/data/.tor" \
+        ghcr.io/deymosh/tor:latest \
+        --ignore-missing-torrc \
+            --DataDirectory /data/.tor \
+            --HiddenServiceDir /data/.tor/simplex-smp \
             --HiddenServicePort "5223 127.0.0.1:5223" \
-            --HiddenServiceDir /var/lib/tor/simplex-xftp \
+            --HiddenServiceDir /data/.tor/simplex-xftp \
             --HiddenServicePort "443 127.0.0.1:443" > /dev/null 2>&1 || true
 
     # Read the keys generated directly by Tor

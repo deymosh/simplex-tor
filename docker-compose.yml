@@ -1,6 +1,6 @@
 services:
   simplex-tor:
-    image: lncm/tor:latest
+    image: ghcr.io/deymosh/tor:latest
     container_name: simplex-tor
     restart: unless-stopped
     user: "${USER_UID}:${USER_GID}"
